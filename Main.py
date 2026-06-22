@@ -204,3 +204,90 @@ async def a2a_demo(query) -> None:
   "cap_call_id": "0x{datetime.now().strftime('%H%M%S')}",
   "timestamp": {int(datetime.now().timestamp())}
 }}
+
+Tracks: {', '.join(AGENT_METADATA['tracks'])}
+"""
+    
+    keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data='back_to_start')]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(demo_text, reply_markup=reply_markup, parse_mode='Markdown')
+
+async def show_agent_info(query) -> None:
+    """Show agent info for humans."""
+    info_text = f"""
+📊 {AGENT_METADATA['name']} Info
+
+What I do:
+I check Fear & Greed Index + live prices to tell you if the market is too scary or too greedy. Other trading bots hire me before they trade.
+
+CAP Compliant: Yes, v{AGENT_METADATA['cap_version']}
+On CROO Agent Store: Yes
+Tracks: {', '.join(AGENT_METADATA['tracks'])}
+
+For Developers:
+Use /agent command to see A2A endpoints and CAP metadata.
+
+Built for CROO Agent Hackathon 2026
+"""
+    keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data='back_to_start')]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(info_text, reply_markup=reply_markup, parse_mode='Markdown')
+
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle button presses."""
+    query = update.callback_query
+    await query.answer()
+    
+    if query.data in ['BTC', 'ETH', 'SOL', 'BNB']:
+        await analyze_crypto(query, query.data)
+    elif query.data == 'a2a_demo':
+        await a2a_demo(query)
+    elif query.data == 'agent_info':
+        await show_agent_info(query)
+    elif query.data == 'back_to_start':
+        await start(update, context)
+Health check endpoint for Render
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == '/health':
+            self.send_response(200)
+            self.send_header('Content-type', 'text/plain')
+            self.end_headers()
+            self.wfile.write(b'OK')
+        else:
+            self.send_response(404)
+            self.end_headers()
+    
+    def log_message(self, format, *args):
+        return  # Suppress HTTP logs
+
+def run_health_server():
+    port = int(os.environ.get('PORT', 10000))
+    server = HTTPServer(('0.0.0.0', port), HealthHandler)
+    logger.info(f"Health check server running on port {port}")
+    server.serve_forever()
+
+def main() -> None:
+    """Start the bot."""
+    bot_token = os.getenv('BOT_TOKEN')
+    if not bot_token:
+        logger.error("BOT_TOKEN not found in environment variables")
+        return
+    
+    application = Application.builder().token(bot_token).build()
+    
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("agent", agent_command))
+    application.add_handler(CallbackQueryHandler(button_handler))
+    
+    # Start health check server in background for Render
+    if os.environ.get('RENDER'):
+        health_thread = threading.Thread(target=run_health_server, daemon=True)
+        health_thread.start()
+        logger.info(f"Starting {AGENT_METADATA['name']} via polling on Render")
+    
+    logger.info(f"Starting {AGENT_METADATA['name']} v{AGENT_METADATA['version']}")
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
+
+if name == 'main':
+    main()
