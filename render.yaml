@@ -1,0 +1,9 @@
+services:
+    - type: worker
+    name: riskoracle-agent
+    env: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python Main.py"
+    envVars:
+            - key: BOT_TOKEN
+        sync: false
